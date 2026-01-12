@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Play, Square, User, Bot, Sparkles, AlertCircle } from 'lucide-react';
+import { Play, Square, User, Sparkles, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface ChatAreaProps {
@@ -40,52 +40,47 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
     }
   }, [input]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white relative">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-32">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-32">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 select-none">
-             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-                <Sparkles size={32} className="text-blue-500" />
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 select-none px-6 text-center">
+             <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
+                <Sparkles size={24} className="text-blue-500" />
              </div>
-             <p className="text-lg font-medium">Start your story</p>
-             <p className="text-sm">Configure a model on the right to begin</p>
+             <p className="font-medium mb-1">How can I help you today?</p>
+             <p className="text-xs">Select a model and ask to generate code.</p>
           </div>
         ) : (
           messages.filter(m => m.role !== 'system').map((msg, idx) => (
-            <div key={idx} className={`flex gap-4 max-w-4xl mx-auto ${msg.role === 'user' ? 'justify-end' : ''}`}>
-               {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-1">
-                     <Sparkles size={16} className="text-blue-600" />
-                  </div>
-               )}
+            <div key={idx} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                
               <div
-                className={`flex-1 max-w-[85%] rounded-2xl p-4 ${
+                className={`flex-1 px-4 py-3 rounded-2xl max-w-full text-sm ${
                   msg.role === 'user'
                     ? 'bg-gray-100 text-gray-800 rounded-tr-none'
-                    : 'bg-white border border-gray-100 text-gray-800 shadow-sm rounded-tl-none'
+                    : 'bg-white text-gray-800 pl-0'
                 }`}
               >
-                <div className="prose prose-sm md:prose-base max-w-none prose-slate">
+                {msg.role === 'assistant' && (
+                  <div className="flex items-center gap-2 mb-1 text-xs font-semibold text-blue-600">
+                     <Sparkles size={12} />
+                     <span>Model</span>
+                  </div>
+                )}
+                
+                <div className="prose prose-sm max-w-none prose-slate prose-pre:bg-gray-50 prose-pre:text-gray-700 prose-pre:border prose-pre:border-gray-200">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
               </div>
-
-              {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0 mt-1">
-                     <User size={16} className="text-gray-600" />
-                  </div>
-               )}
             </div>
           ))
         )}
@@ -93,13 +88,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Input Area */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 px-4 md:px-8">
-        <div className="max-w-4xl mx-auto relative bg-white rounded-3xl border border-gray-300 shadow-lg focus-within:shadow-xl focus-within:border-blue-400 transition-all duration-200">
-           {/* Loading State Overlay if no model selected */}
+      <div className="bg-white border-t border-gray-100 p-4">
+        <div className="relative bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100 transition-all duration-200">
+           {/* Loading State Overlay */}
            {!isModelSelected && (
-              <div className="absolute inset-0 bg-gray-50/80 z-10 rounded-3xl flex items-center justify-center text-gray-500 gap-2 cursor-not-allowed">
-                 <AlertCircle size={18} />
-                 <span className="text-sm font-medium">Select a model to start chatting</span>
+              <div className="absolute inset-0 bg-gray-50/90 z-10 rounded-2xl flex items-center justify-center text-gray-500 gap-2 cursor-not-allowed text-xs">
+                 <AlertCircle size={14} />
+                 <span className="font-medium">Model required</span>
               </div>
            )}
 
@@ -109,39 +104,39 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type your prompt here..."
-              className="w-full max-h-[200px] py-3 px-4 bg-transparent border-none outline-none resize-none text-gray-700 placeholder-gray-400"
+              placeholder="Type instructions or paste code..."
+              className="w-full max-h-[150px] py-2 px-3 bg-transparent border-none outline-none resize-none text-sm text-gray-700 placeholder-gray-400"
               rows={1}
-              disabled={!isModelSelected || (isStreaming && false)} // Allow typing while streaming? Usually no.
+              disabled={!isModelSelected}
             />
-            <div className="pb-1 pr-1">
+            <div className="pb-0.5 pr-0.5">
               {isStreaming ? (
                 <button
                   onClick={onStop}
-                  className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors flex items-center justify-center"
+                  className="p-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl transition-colors flex items-center justify-center"
                   title="Stop generation"
                 >
-                  <Square size={20} fill="currentColor" />
+                  <Square size={16} fill="currentColor" />
                 </button>
               ) : (
                 <button
                   onClick={onSend}
                   disabled={!input.trim() || !isModelSelected}
-                  className={`p-3 rounded-full transition-colors flex items-center justify-center ${
+                  className={`p-2 rounded-xl transition-colors flex items-center justify-center ${
                     input.trim() && isModelSelected
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                   title="Run prompt"
                 >
-                  <Play size={20} fill="currentColor" className="ml-1" />
+                  <Play size={16} fill="currentColor" className="ml-0.5" />
                 </button>
               )}
             </div>
           </div>
         </div>
-        <div className="text-center text-xs text-gray-400 mt-2">
-           Ollama Studio can make mistakes. Check model details.
+        <div className="text-center text-[10px] text-gray-400 mt-2">
+           Local LLMs can be unpredictable.
         </div>
       </div>
     </div>

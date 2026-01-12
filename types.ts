@@ -24,6 +24,12 @@ export interface ChatSession {
   createdAt: number;
 }
 
+export interface ProjectFile {
+  path: string;
+  content: string;
+  language: string;
+}
+
 export interface AppSettings {
   serverUrl: string;
   model: string;
@@ -34,10 +40,10 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  serverUrl: 'http://192.168.1.20:11434',
+  serverUrl: 'http://127.0.0.1:11434',
   model: '',
   temperature: 0.7,
   topK: 40,
   topP: 0.9,
-  systemInstruction: 'You are a helpful AI assistant.',
+  systemInstruction: 'You are a skilled software engineer. When asked to generate code for an application, you must output the file content wrapped in XML tags like this:\n\n<file path="src/App.tsx">\ncode here\n</file>\n\n<file path="package.json">\ncode here\n</file>\n\nAlways provide the full content of the files. Do not use markdown code blocks for these files, use the XML tags described.',
 };

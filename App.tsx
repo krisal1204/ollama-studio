@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { SettingsPanel } from './components/SettingsPanel';
+import { WorkspacePanel } from './components/WorkspacePanel';
 import { OllamaService } from './services/ollama';
-import { ChatMessage, ChatSession, AppSettings, OllamaModel, DEFAULT_SETTINGS } from './types';
-import { PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { ChatMessage, ChatSession, AppSettings, OllamaModel, DEFAULT_SETTINGS, ProjectFile } from './types';
+import { PanelRightOpen, PanelRightClose, Code, Layout } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
@@ -22,11 +23,15 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile sidebar
-  const [settingsOpen, setSettingsOpen] = useState(true); // Desktop right panel
+  const [settingsOpen, setSettingsOpen] = useState(false); // Settings panel toggler
+  const [viewMode, setViewMode] = useState<'both' | 'chat_only' | 'code_only'>('both');
 
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  
+  // Workspace State
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
 
   // Derived state
   const currentSession = sessions.find(s => s.id === currentSessionId);
@@ -48,12 +53,10 @@ const App: React.FC = () => {
     try {
       const fetchedModels = await OllamaService.getModels(settings.serverUrl);
       setModels(fetchedModels);
-      // Auto select first model if none selected
       if (!settings.model && fetchedModels.length > 0) {
         setSettings(prev => ({ ...prev, model: fetchedModels[0].name }));
       }
     } catch (err: any) {
-      // Don't log full error stack for common connection issues to keep console clean
       console.warn("Ollama connection failed:", err.message);
       setConnectionError(err.message || 'Could not connect to Ollama server.');
       setModels([]);
@@ -62,11 +65,48 @@ const App: React.FC = () => {
     }
   }, [settings.serverUrl]);
 
-  // Initial fetch
   useEffect(() => {
     fetchModels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  }, []);
+
+  // File Parsing Logic
+  // We scan the assistant's last message for <file path="..."> tags
+  useEffect(() => {
+    if (!currentSession) {
+      setProjectFiles([]);
+      return;
+    }
+
+    const lastMsg = currentSession.messages[currentSession.messages.length - 1];
+    if (lastMsg && lastMsg.role === 'assistant') {
+      const files: ProjectFile[] = [];
+      const content = lastMsg.content;
+      
+      // Regex to match <file path="path/to/file">content</file>
+      // Using [\s\S]*? to match across newlines lazily
+      const fileRegex = /<file\s+path="([^"]+)">([\s\S]*?)<\/file>/g;
+      
+      let match;
+      while ((match = fileRegex.exec(content)) !== null) {
+        const path = match[1];
+        const fileContent = match[2].trim(); // Trim extra whitespace created by XML formatting
+        
+        // Check if file already exists in this parsing pass, if so overwrite (update)
+        const existingIndex = files.findIndex(f => f.path === path);
+        const newFile = { path, content: fileContent, language: 'typescript' }; // Default lang
+        
+        if (existingIndex >= 0) {
+          files[existingIndex] = newFile;
+        } else {
+          files.push(newFile);
+        }
+      }
+      
+      if (files.length > 0) {
+        setProjectFiles(files);
+      }
+    }
+  }, [currentSession, isStreaming]); // Update while streaming to show files appearing in real-time
 
   // Handlers
   const handleNewChat = () => {
@@ -79,20 +119,21 @@ const App: React.FC = () => {
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
     setInput('');
-    // Mobile: close sidebar
+    setProjectFiles([]);
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   const handleSelectSession = (id: string) => {
     setCurrentSessionId(id);
     setInput('');
+    // Clear files momentarily, effect will repopulate if messages exist
+    setProjectFiles([]); 
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   const handleSend = async () => {
     if (!input.trim() || !settings.model) return;
 
-    // Create session if none exists
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       const newSession: ChatSession = {
@@ -105,7 +146,6 @@ const App: React.FC = () => {
       activeSessionId = newSession.id;
       setCurrentSessionId(activeSessionId);
     } else {
-       // Update title if it's "New Chat"
        const sess = sessions.find(s => s.id === activeSessionId);
        if (sess && sess.title === 'New Chat') {
           setSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, title: input.slice(0, 30)} : s));
@@ -114,7 +154,6 @@ const App: React.FC = () => {
 
     const userMessage: ChatMessage = { role: 'user', content: input };
     
-    // Add User Message
     setSessions(prev => prev.map(s => {
       if (s.id === activeSessionId) {
         return { ...s, messages: [...s.messages, userMessage] };
@@ -126,6 +165,7 @@ const App: React.FC = () => {
     setIsStreaming(true);
 
     try {
+      // Ensure system instructions are always first
       const messagesPayload = [
         { role: 'system', content: settings.systemInstruction },
         ...(sessions.find(s => s.id === activeSessionId)?.messages || []),
@@ -134,7 +174,6 @@ const App: React.FC = () => {
 
       let assistantMessageContent = '';
       
-      // Initialize assistant message
       setSessions(prev => prev.map(s => {
         if (s.id === activeSessionId) {
           return { ...s, messages: [...s.messages, { role: 'assistant', content: '' }] };
@@ -168,7 +207,6 @@ const App: React.FC = () => {
       );
     } catch (error) {
       console.error(error);
-      // Add error message to chat
        setSessions(prev => prev.map(s => {
         if (s.id === activeSessionId) {
           return { ...s, messages: [...s.messages, { role: 'assistant', content: '**Error**: Failed to generate response. Check connection settings.' }] };
@@ -181,14 +219,11 @@ const App: React.FC = () => {
   };
 
   const handleStop = () => {
-     // Currently Ollama API cancellation needs an abort controller, 
-     // but for simplicity we just stop updating UI and set streaming false.
-     // In a real app, pass AbortSignal to the fetch.
      setIsStreaming(false);
   };
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden text-sm md:text-base">
+    <div className="flex h-screen bg-white overflow-hidden text-sm md:text-base font-sans">
       <Sidebar 
         sessions={sessions}
         currentSessionId={currentSessionId}
@@ -199,22 +234,43 @@ const App: React.FC = () => {
       />
 
       <div className="flex-1 flex flex-col h-full min-w-0">
-        <header className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white z-20">
+        <header className="h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white z-20 shrink-0">
            <div className="flex items-center gap-2">
-             <div className="md:hidden w-8" /> {/* Spacer for menu button */}
+             <div className="md:hidden w-8" /> 
              <span className="font-medium text-gray-700 truncate">
                {currentSession?.title || 'Ollama Studio'}
              </span>
            </div>
            
            <div className="flex items-center gap-2">
-              <div className="px-3 py-1 bg-gray-100 rounded text-xs font-mono text-gray-600 hidden sm:block">
+              <div className="hidden md:flex bg-gray-100 p-0.5 rounded-lg mr-2">
+                <button 
+                  onClick={() => setViewMode('chat_only')}
+                  className={`px-2 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'chat_only' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Chat
+                </button>
+                <button 
+                   onClick={() => setViewMode('both')}
+                   className={`px-2 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'both' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Split
+                </button>
+                <button 
+                   onClick={() => setViewMode('code_only')}
+                   className={`px-2 py-1 rounded-md text-xs font-medium transition-all ${viewMode === 'code_only' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Project
+                </button>
+              </div>
+
+              <div className="px-3 py-1 bg-gray-100 rounded text-xs font-mono text-gray-600 hidden sm:block border border-gray-200">
                  {settings.model || 'No model selected'}
               </div>
               <button 
                 onClick={() => setSettingsOpen(!settingsOpen)}
-                className={`p-2 rounded-md transition-colors ${settingsOpen ? 'bg-gray-200 text-gray-800' : 'hover:bg-gray-100 text-gray-600'}`}
-                title="Toggle settings"
+                className={`p-2 rounded-md transition-colors ${settingsOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-600'}`}
+                title="Settings"
               >
                  {settingsOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
               </button>
@@ -222,16 +278,32 @@ const App: React.FC = () => {
         </header>
 
         <main className="flex-1 flex overflow-hidden">
-          <ChatArea 
-            messages={messages}
-            input={input}
-            setInput={setInput}
-            onSend={handleSend}
-            isStreaming={isStreaming}
-            onStop={handleStop}
-            isModelSelected={!!settings.model}
-          />
+          {/* Chat Pane */}
+          <div className={`${
+            viewMode === 'code_only' ? 'hidden' : 
+            viewMode === 'chat_only' ? 'w-full' : 
+            'w-[35%] min-w-[320px] max-w-[600px] border-r border-gray-200'
+          } flex flex-col transition-all duration-300`}>
+            <ChatArea 
+              messages={messages}
+              input={input}
+              setInput={setInput}
+              onSend={handleSend}
+              isStreaming={isStreaming}
+              onStop={handleStop}
+              isModelSelected={!!settings.model}
+            />
+          </div>
+
+          {/* Workspace Pane */}
+          <div className={`${
+            viewMode === 'chat_only' ? 'hidden' : 
+            'flex-1'
+          } flex flex-col transition-all duration-300`}>
+             <WorkspacePanel files={projectFiles} />
+          </div>
           
+          {/* Settings Pane (Overlay or Push) */}
           {settingsOpen && (
              <SettingsPanel 
                 settings={settings}
