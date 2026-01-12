@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sliders, Settings, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Sliders, Settings, HelpCircle, AlertTriangle, ShieldAlert, Radio } from 'lucide-react';
 import { AppSettings, OllamaModel } from '../types';
 
 interface SettingsPanelProps {
@@ -22,6 +22,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const handleChange = (field: keyof AppSettings, value: string | number) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
   };
+
+  // Diagnostics
+  const isMixedContent = typeof window !== 'undefined' && 
+    window.location.protocol === 'https:' && 
+    settings.serverUrl.startsWith('http:');
+    
+  const isLocalNetwork = settings.serverUrl.includes('192.168') || 
+    settings.serverUrl.includes('10.') || 
+    settings.serverUrl.includes('172.');
 
   return (
     <div className="w-80 border-l border-gray-200 bg-white flex flex-col h-full overflow-y-auto">
@@ -74,30 +83,51 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               type="text"
               value={settings.serverUrl}
               onChange={(e) => handleChange('serverUrl', e.target.value)}
-              placeholder="http://192.168.1.20:11434"
+              placeholder="http://localhost:11434"
               className="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
+          
           {connectionError && (
              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-600 space-y-2">
                 <div className="flex gap-2 items-start font-medium">
                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                    <span>Connection Failed</span>
                 </div>
-                <div className="pl-6 space-y-1">
-                   <p>{connectionError}</p>
-                   <div className="pt-1 border-t border-red-100 mt-1">
-                      <p className="font-semibold text-red-700">Possible fixes:</p>
-                      <ul className="list-disc pl-4 space-y-1 text-red-700/80">
-                         <li>Ensure Ollama is running</li>
-                         <li>Check URL (default: http://192.168.1.20:11434)</li>
-                         <li>Allow browser connections (CORS):</li>
-                      </ul>
-                      <code className="block mt-1 bg-red-100 p-1.5 rounded font-mono text-[10px] break-all select-all">
-                        OLLAMA_ORIGINS="*" ollama serve
-                      </code>
-                   </div>
-                </div>
+                
+                {isMixedContent ? (
+                  <div className="pl-6 space-y-2">
+                    <p className="font-semibold text-red-700">Mixed Content Error</p>
+                    <p>
+                      Your browser blocked the request because this page is HTTPS but your server is HTTP.
+                    </p>
+                    <p className="italic">Solution: You must use a browser extension to allow mixed content or host this app on HTTP (localhost).</p>
+                  </div>
+                ) : (
+                  <div className="pl-6 space-y-2">
+                     <p>{connectionError}</p>
+                     <div className="pt-2 border-t border-red-100 mt-1 space-y-2">
+                        <p className="font-semibold text-red-700">Troubleshooting:</p>
+                        
+                        {isLocalNetwork && (
+                           <div className="bg-red-100/50 p-2 rounded">
+                              <span className="font-semibold">Network IP Detected:</span>
+                              <p className="mt-1 mb-1">By default, Ollama only listens on localhost.</p>
+                              <code className="block bg-white p-1 rounded border border-red-100 font-mono">
+                                 OLLAMA_HOST=0.0.0.0
+                              </code>
+                           </div>
+                        )}
+
+                        <div>
+                           <p className="mb-1">Allow browser connections (CORS):</p>
+                           <code className="block bg-red-100 p-1.5 rounded font-mono text-[10px] break-all select-all border border-red-200">
+                             OLLAMA_ORIGINS="*" ollama serve
+                           </code>
+                        </div>
+                     </div>
+                  </div>
+                )}
              </div>
           )}
         </div>

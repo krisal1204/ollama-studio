@@ -52,14 +52,15 @@ const App: React.FC = () => {
       if (!settings.model && fetchedModels.length > 0) {
         setSettings(prev => ({ ...prev, model: fetchedModels[0].name }));
       }
-    } catch (err) {
-      console.error("Model fetch failed:", err);
-      setConnectionError('Could not connect to Ollama server.');
+    } catch (err: any) {
+      // Don't log full error stack for common connection issues to keep console clean
+      console.warn("Ollama connection failed:", err.message);
+      setConnectionError(err.message || 'Could not connect to Ollama server.');
       setModels([]);
     } finally {
       setIsLoadingModels(false);
     }
-  }, [settings.serverUrl]); // Dependency fixed: only re-fetch if URL changes
+  }, [settings.serverUrl]);
 
   // Initial fetch
   useEffect(() => {
@@ -170,7 +171,7 @@ const App: React.FC = () => {
       // Add error message to chat
        setSessions(prev => prev.map(s => {
         if (s.id === activeSessionId) {
-          return { ...s, messages: [...s.messages, { role: 'assistant', content: '**Error**: Failed to generate response. Check connection.' }] };
+          return { ...s, messages: [...s.messages, { role: 'assistant', content: '**Error**: Failed to generate response. Check connection settings.' }] };
         }
         return s;
       }));
