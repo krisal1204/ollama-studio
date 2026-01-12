@@ -9,8 +9,9 @@ import { PanelRightOpen, PanelRightClose, Code, Layout } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
+  // STORAGE KEY UPDATED TO v2 TO ENSURE FRESH DEFAULTS ARE LOADED
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('ollama_settings');
+    const saved = localStorage.getItem('ollama_settings_v2');
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
   
@@ -39,7 +40,7 @@ const App: React.FC = () => {
 
   // Persistence
   useEffect(() => {
-    localStorage.setItem('ollama_settings', JSON.stringify(settings));
+    localStorage.setItem('ollama_settings_v2', JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
@@ -70,7 +71,6 @@ const App: React.FC = () => {
   }, []);
 
   // File Parsing Logic
-  // We scan the assistant's last message for <file path="..."> tags
   useEffect(() => {
     if (!currentSession) {
       setProjectFiles([]);
@@ -82,18 +82,16 @@ const App: React.FC = () => {
       const files: ProjectFile[] = [];
       const content = lastMsg.content;
       
-      // Regex to match <file path="path/to/file">content</file>
-      // Using [\s\S]*? to match across newlines lazily
+      // 1. Find all complete files using regex
       const fileRegex = /<file\s+path="([^"]+)">([\s\S]*?)<\/file>/g;
       
       let match;
       while ((match = fileRegex.exec(content)) !== null) {
         const path = match[1];
-        const fileContent = match[2].trim(); // Trim extra whitespace created by XML formatting
+        const fileContent = match[2].trim();
         
-        // Check if file already exists in this parsing pass, if so overwrite (update)
         const existingIndex = files.findIndex(f => f.path === path);
-        const newFile = { path, content: fileContent, language: 'typescript' }; // Default lang
+        const newFile = { path, content: fileContent, language: 'typescript' };
         
         if (existingIndex >= 0) {
           files[existingIndex] = newFile;
@@ -101,12 +99,36 @@ const App: React.FC = () => {
           files.push(newFile);
         }
       }
+
+      // 2. Handle incomplete file at the end (streaming)
+      // Match the last <file tag. If it appears AFTER the last </file> tag, it is incomplete.
+      const lastOpenTag = content.lastIndexOf('<file path="');
+      const lastCloseTag = content.lastIndexOf('</file>');
+      
+      if (lastOpenTag > lastCloseTag && lastOpenTag !== -1) {
+          const remainder = content.slice(lastOpenTag);
+          const pathMatch = remainder.match(/<file\s+path="([^"]+)">/);
+          if (pathMatch) {
+              const path = pathMatch[1];
+              // Content is everything after the opening tag
+              const fileContent = remainder.slice(pathMatch[0].length);
+              
+              const existingIndex = files.findIndex(f => f.path === path);
+              const newFile = { path, content: fileContent, language: 'typescript' };
+              
+              if (existingIndex >= 0) {
+                files[existingIndex] = newFile;
+              } else {
+                files.push(newFile);
+              }
+          }
+      }
       
       if (files.length > 0) {
         setProjectFiles(files);
       }
     }
-  }, [currentSession, isStreaming]); // Update while streaming to show files appearing in real-time
+  }, [currentSession, isStreaming]);
 
   // Handlers
   const handleNewChat = () => {
@@ -126,8 +148,7 @@ const App: React.FC = () => {
   const handleSelectSession = (id: string) => {
     setCurrentSessionId(id);
     setInput('');
-    // Clear files momentarily, effect will repopulate if messages exist
-    setProjectFiles([]); 
+    setProjectFiles([]); // clear temporarily
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
