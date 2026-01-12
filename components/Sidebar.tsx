@@ -1,11 +1,12 @@
 import React from 'react';
-import { Plus, MessageSquare, Menu, Database } from 'lucide-react';
+import { Plus, MessageSquare, Menu, Database, Trash2 } from 'lucide-react';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
   sessions: ChatSession[];
   currentSessionId: string | null;
   onSelectSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
   onNewChat: () => void;
   isOpen: boolean;
   toggleOpen: () => void;
@@ -15,6 +16,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   sessions,
   currentSessionId,
   onSelectSession,
+  onDeleteSession,
   onNewChat,
   isOpen,
   toggleOpen,
@@ -62,18 +64,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="px-4 py-2 text-sm text-gray-400 italic">No history</div>
            )}
           {sessions.map((session) => (
-            <button
-              key={session.id}
-              onClick={() => onSelectSession(session.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-3 transition-colors ${
-                currentSessionId === session.id
-                  ? 'bg-blue-50 text-blue-700 font-medium'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <MessageSquare size={16} className={currentSessionId === session.id ? 'text-blue-500' : 'text-gray-400'} />
-              <span className="truncate">{session.title}</span>
-            </button>
+            <div key={session.id} className="relative group">
+              <button
+                onClick={() => onSelectSession(session.id)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-3 transition-colors ${
+                  currentSessionId === session.id
+                    ? 'bg-blue-50 text-blue-700 font-medium'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <MessageSquare size={16} className={`shrink-0 ${currentSessionId === session.id ? 'text-blue-500' : 'text-gray-400'}`} />
+                <span className="truncate pr-6">{session.title}</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteSession(session.id);
+                }}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all ${
+                  currentSessionId === session.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+                title="Delete chat"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
 

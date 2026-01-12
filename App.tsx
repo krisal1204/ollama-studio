@@ -9,7 +9,6 @@ import { PanelRightOpen, PanelRightClose, Code, Layout } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
-  // STORAGE KEY UPDATED TO v2 TO ENSURE FRESH DEFAULTS ARE LOADED
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('ollama_settings_v2');
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
@@ -23,8 +22,8 @@ const App: React.FC = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile sidebar
-  const [settingsOpen, setSettingsOpen] = useState(false); // Settings panel toggler
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'both' | 'chat_only' | 'code_only'>('both');
 
   const [models, setModels] = useState<OllamaModel[]>([]);
@@ -70,38 +69,30 @@ const App: React.FC = () => {
     fetchModels();
   }, []);
 
-  // File Parsing Logic
+  // File Parsing Logic - MERGING STRATEGY
   useEffect(() => {
-    if (!currentSession) {
-      setProjectFiles([]);
+    if (!currentSession || !isStreaming) {
       return;
     }
 
     const lastMsg = currentSession.messages[currentSession.messages.length - 1];
     if (lastMsg && lastMsg.role === 'assistant') {
-      const files: ProjectFile[] = [];
       const content = lastMsg.content;
       
-      // 1. Find all complete files using regex
-      const fileRegex = /<file\s+path="([^"]+)">([\s\S]*?)<\/file>/g;
+      const newFiles: ProjectFile[] = [];
       
+      // 1. Find all complete files
+      const fileRegex = /<file\s+path="([^"]+)">([\s\S]*?)<\/file>/g;
       let match;
       while ((match = fileRegex.exec(content)) !== null) {
-        const path = match[1];
-        const fileContent = match[2].trim();
-        
-        const existingIndex = files.findIndex(f => f.path === path);
-        const newFile = { path, content: fileContent, language: 'typescript' };
-        
-        if (existingIndex >= 0) {
-          files[existingIndex] = newFile;
-        } else {
-          files.push(newFile);
-        }
+        newFiles.push({
+          path: match[1],
+          content: match[2].trim(),
+          language: 'typescript'
+        });
       }
 
-      // 2. Handle incomplete file at the end (streaming)
-      // Match the last <file tag. If it appears AFTER the last </file> tag, it is incomplete.
+      // 2. Handle incomplete file at the end
       const lastOpenTag = content.lastIndexOf('<file path="');
       const lastCloseTag = content.lastIndexOf('</file>');
       
@@ -110,22 +101,29 @@ const App: React.FC = () => {
           const pathMatch = remainder.match(/<file\s+path="([^"]+)">/);
           if (pathMatch) {
               const path = pathMatch[1];
-              // Content is everything after the opening tag
               const fileContent = remainder.slice(pathMatch[0].length);
-              
-              const existingIndex = files.findIndex(f => f.path === path);
-              const newFile = { path, content: fileContent, language: 'typescript' };
-              
-              if (existingIndex >= 0) {
-                files[existingIndex] = newFile;
-              } else {
-                files.push(newFile);
-              }
+              newFiles.push({
+                path: path,
+                content: fileContent,
+                language: 'typescript'
+              });
           }
       }
       
-      if (files.length > 0) {
-        setProjectFiles(files);
+      if (newFiles.length > 0) {
+        // Merge logic: Update existing files or add new ones
+        setProjectFiles(prev => {
+          const next = [...prev];
+          newFiles.forEach(newFile => {
+            const idx = next.findIndex(f => f.path === newFile.path);
+            if (idx >= 0) {
+              next[idx] = newFile;
+            } else {
+              next.push(newFile);
+            }
+          });
+          return next;
+        });
       }
     }
   }, [currentSession, isStreaming]);
@@ -148,8 +146,27 @@ const App: React.FC = () => {
   const handleSelectSession = (id: string) => {
     setCurrentSessionId(id);
     setInput('');
-    setProjectFiles([]); // clear temporarily
+    // When selecting a new session, we ideally want to restore files if we saved them in session,
+    // but for now, we just reset. In a real app, you'd parse all history to rebuild state.
+    setProjectFiles([]); 
     if (window.innerWidth < 768) setSidebarOpen(false);
+  };
+
+  const handleDeleteSession = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this chat?')) {
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (currentSessionId === id) {
+        setCurrentSessionId(null);
+        setProjectFiles([]);
+        setInput('');
+      }
+    }
+  };
+
+  const handleUpdateFile = (path: string, newContent: string) => {
+    setProjectFiles(prev => prev.map(f => 
+      f.path === path ? { ...f, content: newContent } : f
+    ));
   };
 
   const handleSend = async () => {
@@ -186,7 +203,6 @@ const App: React.FC = () => {
     setIsStreaming(true);
 
     try {
-      // Ensure system instructions are always first
       const messagesPayload = [
         { role: 'system', content: settings.systemInstruction },
         ...(sessions.find(s => s.id === activeSessionId)?.messages || []),
@@ -249,6 +265,7 @@ const App: React.FC = () => {
         sessions={sessions}
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
         onNewChat={handleNewChat}
         isOpen={sidebarOpen}
         toggleOpen={() => setSidebarOpen(!sidebarOpen)}
@@ -321,10 +338,13 @@ const App: React.FC = () => {
             viewMode === 'chat_only' ? 'hidden' : 
             'flex-1'
           } flex flex-col transition-all duration-300`}>
-             <WorkspacePanel files={projectFiles} />
+             <WorkspacePanel 
+               files={projectFiles} 
+               onUpdateFile={handleUpdateFile}
+             />
           </div>
           
-          {/* Settings Pane (Overlay or Push) */}
+          {/* Settings Pane */}
           {settingsOpen && (
              <SettingsPanel 
                 settings={settings}
