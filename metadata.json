@@ -1,0 +1,5 @@
+{
+  "name": "Ollama Studio",
+  "description": "A web-based interface for local LLMs via Ollama, inspired by Google AI Studio. Configure your local server, manage models, and experiment with prompts.",
+  "requestFramePermissions": []
+}
