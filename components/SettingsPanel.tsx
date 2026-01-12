@@ -74,7 +74,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               type="text"
               value={settings.serverUrl}
               onChange={(e) => handleChange('serverUrl', e.target.value)}
-              placeholder="http://localhost:11434"
+              placeholder="http://192.168.1.20:11434"
               className="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
@@ -90,7 +90,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       <p className="font-semibold text-red-700">Possible fixes:</p>
                       <ul className="list-disc pl-4 space-y-1 text-red-700/80">
                          <li>Ensure Ollama is running</li>
-                         <li>Check URL (default: http://localhost:11434)</li>
+                         <li>Check URL (default: http://192.168.1.20:11434)</li>
                          <li>Allow browser connections (CORS):</li>
                       </ul>
                       <code className="block mt-1 bg-red-100 p-1.5 rounded font-mono text-[10px] break-all select-all">

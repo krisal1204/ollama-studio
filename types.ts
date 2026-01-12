@@ -34,7 +34,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  serverUrl: 'http://localhost:11434',
+  serverUrl: 'http://192.168.1.20:11434',
   model: '',
   temperature: 0.7,
   topK: 40,
